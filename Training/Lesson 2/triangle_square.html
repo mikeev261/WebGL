@@ -1,0 +1,204 @@
+<html>
+
+<head>
+<title>Mike's Trianle & Square</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script type="text/javascript" src="glMatrix-0.9.5.min.js"></script>
+
+<script id="shader-fs" type="x-shader/x-fragment">
+//FRAGMENT SHADER
+    precision mediump float;
+
+    void main(void) {
+        gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+    }
+</script>
+
+<script id="shader-vs" type="x-shader/x-vertex">
+//VERTEX SHADER
+    attribute vec3 aVertexPosition;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+
+    void main(void) {
+        gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    }
+</script>
+
+
+<script type="text/javascript">
+  var gl;
+  function initGL(canvas) {
+    try {
+      gl = canvas.getContext("experimental-webgl");
+      gl.viewportWidth = canvas.width;
+      gl.viewportHeight = canvas.height;
+    } catch(e) {
+    }
+    if (!gl) {
+      alert("Could not initialise WebGL, sorry :-( ");
+    }
+  }
+
+  function getShader(gl, id) { 
+//Looking for an element in our HTML page that has an ID that matches a parameter passed in, pulling out its contents, creating either a fragment or a vertex shader based on its type, and then passign it off to WebGL to be compiled into a form that can run on the graphics card. 
+      var shaderScript = document.getElementById(id);
+      if (!shaderScript) {
+          return null;
+      }
+
+      var str = "";
+      var k = shaderScript.firstChild;
+      while (k) {
+          if (k.nodeType == 3) {
+              str += k.textContent;
+          }
+          k = k.nextSibling;
+      }
+
+      var shader;
+      if (shaderScript.type == "x-shader/x-fragment") {
+          shader = gl.createShader(gl.FRAGMENT_SHADER);
+      } else if (shaderScript.type == "x-shader/x-vertex") {
+          shader = gl.createShader(gl.VERTEX_SHADER);
+      } else {
+          return null;
+      }
+
+      gl.shaderSource(shader, str);
+      gl.compileShader(shader);
+
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          alert(gl.getShaderInfoLog(shader));
+          return null;
+      }
+
+      return shader;
+  } //getShader
+
+  var shaderProgram;
+
+  function initShaders() { //Initializes our two shaders. 
+    var fragmentShader = getShader(gl, "shader-fs"); //Retreives our shaders //FRAG
+    var vertexShader = getShader(gl, "shader-vs"); //VERTEX
+
+    shaderProgram = gl.createProgram();  
+    gl.attachShader(shaderProgram, vertexShader);
+    gl.attachShader(shaderProgram, fragmentShader);
+    gl.linkProgram(shaderProgram);
+
+    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+      alert("Could not initialise shaders");
+    }
+
+    gl.useProgram(shaderProgram);
+
+    shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+    gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute); //Tells WebGL that we will want to provide values for the attribute using an array. 
+    shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix"); 
+    shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
+  } //initShaders
+
+
+
+
+  var mvMatrix = mat4.create(); //Model View Matrix
+  var pMatrix = mat4.create();  //Projection Matrix
+  
+  function setMatrixUniforms() {
+    gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
+    gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform,false, mvMatrix);
+  }
+
+
+  var triangleVertexPositionBuffer; 
+  var squareVertexPositionBuffer; 
+
+  function initBuffers() {
+    //Triangle
+    triangleVertexPositionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
+    var vertices = [
+      0.0,  1.0,  0.0, 
+     -1.0, -1.0,  0.0,
+      1.0, -1.0,  0.0
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    triangleVertexPositionBuffer.itemSize = 3; 
+    triangleVertexPositionBuffer.numItems = 3;
+  
+    //Square	
+    squareVertexPositionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
+    vertices = [
+      1.0,  1.0,  0.0, 
+     -1.0,  1.0,  0.0, 
+      1.0, -1.0,  0.0, 
+     -1.0, -1.0,  0.0
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    squareVertexPositionBuffer.itemSize = 3; 
+    squareVertexPositionBuffer.numItems = 4; 
+  } //initBuffers
+//Data now pushed up to graphics card! 
+
+
+
+  function drawScene() { //Here we actually draw the scene
+    gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight); //Tells WebGL a little bit about the size of the canvas
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); //clears the canvas in preparation for drawing on it
+
+    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix); //Setting up the perspective with which we want to view the scene. 
+    // This indicates a perspective angle of 45deg. 
+    // We don't want to see things that are closer that 0.1 units away from our viewpoint
+    // We don't want to see things that are further away than 100 units (draw distance). 
+
+    mat4.identity(mvMatrix); // Identity Matrix
+
+    ////////////////////////////////////
+    //DRAW TRIANGLE 
+    ////////////////////////////////////
+
+    //Draws the triangle on the left-hand side of our canvas.
+    mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);  
+    gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer); //selects triangleVertexPositionBuffer
+    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0); //Tells webGL that the values in the buffer should be used for vertex positions. 
+    //Itemsize property tells WebGL that each item in the buffer is 3 numbers long. 
+    setMatrixUniforms(); //Tells WebGL to take account of our current model-view matrix (and projection matrix). This is because matrix stuff isn't built into WebGL natively. Moves the matrix to the graphics card. 
+    gl.drawArrays(gl.TRIANGLES, 0, triangleVertexPositionBuffer.numItems); //"Draw the array of vertices I gave you earlier as triangles, starting with item 0 in the array and going up to the numItems-th element".
+    
+    ////////////////////////////////////
+    //DRAW SQUARE
+    ////////////////////////////////////
+    mat4.translate(mvMatrix, [3.0, 0.0, 0.0]); //Now moving our model-view matrix 3 to the right. We're currently already 1.5 to the left (and 7 away from the screen). This ultimately leaves us 1.5 to the right (and 7 away). 
+    gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer); 
+    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);  //Tells WebGL to use our square's buffer for its vertex positions. 
+    setMatrixUniforms(); //Push over the model-view and projection matrices again
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareVertexPositionBuffer.numItems); //Draws the points (square = strip of triangles). 
+  } //drawScene
+
+  //Basic initialization function
+  function webGLStart() {
+    var canvas = document.getElementById("lesson01-canvas");
+    initGL(canvas);
+    initShaders();
+    initBuffers(); 
+    gl.clearColor(0.0,0.0,0.0,1.0); 
+    gl.enable(gl.DEPTH_TEST);
+    drawScene();
+  } //drawScene
+//webGLStart
+</script>
+</head>
+
+
+<body onload="webGLStart();">
+
+  <canvas id="lesson01-canvas" style="border: none;" width="500" height="500"></canvas>
+
+  <br/>
+</body>
+
+</html>
